@@ -6,14 +6,31 @@
 #   epm-gha-apply (administrador) -> solo el entorno "prod" de GitHub: apply / destroy
 #   epm-gha-app   (ECR + ECS)     -> rama main: despliegue de la aplicacion
 # Se ejecuta en AWS CloudShell (ya autenticado, trae aws cli):
-#   GITHUB_REPO=usuario/repositorio bash scripts/bootstrap-aws.sh
+#   GITHUB_REPO=usuario/repositorio GITHUB_OWNER_ID=123 GITHUB_REPO_ID=456 bash scripts/bootstrap-aws.sh
 #   GITHUB_REPO=usuario/repositorio bash scripts/bootstrap-aws.sh destroy   # deshacerlo todo
 set -euo pipefail
 
-GITHUB_REPO="${GITHUB_REPO:?Defina GITHUB_REPO=usuario/repositorio}"
+GITHUB_REPO="${GITHUB_REPO:-brayancorrea-coder/EPM_TERRAFORM_CI_CD_OBSERVABILIDAD}"
 AWS_REGION="${AWS_REGION:-us-east-2}"
 PROJECT_NAME="${PROJECT_NAME:-epm-iac}"
 ACTION="${1:-create}"
+
+if [ "$ACTION" != "destroy" ]; then
+  GITHUB_OWNER_ID="${GITHUB_OWNER_ID:?Defina GITHUB_OWNER_ID (ID numerico del propietario de GitHub)}"
+  GITHUB_REPO_ID="${GITHUB_REPO_ID:?Defina GITHUB_REPO_ID (ID numerico del repositorio de GitHub)}"
+  case "$GITHUB_REPO" in
+    */*) ;;
+    *) echo "GITHUB_REPO debe tener el formato propietario/repositorio" >&2; exit 1 ;;
+  esac
+  GITHUB_OWNER="${GITHUB_REPO%%/*}"
+  GITHUB_REPO_NAME="${GITHUB_REPO#*/}"
+  if [ -z "$GITHUB_OWNER" ] || [ -z "$GITHUB_REPO_NAME" ] || [[ "$GITHUB_REPO_NAME" == */* ]] ||
+    ! [[ "$GITHUB_OWNER_ID" =~ ^[0-9]+$ ]] || ! [[ "$GITHUB_REPO_ID" =~ ^[0-9]+$ ]]; then
+    echo "GITHUB_REPO, GITHUB_OWNER_ID o GITHUB_REPO_ID no son validos" >&2
+    exit 1
+  fi
+  GITHUB_SUBJECT_PREFIX="repo:${GITHUB_OWNER}@${GITHUB_OWNER_ID}/${GITHUB_REPO_NAME}@${GITHUB_REPO_ID}"
+fi
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 BUCKET="${STATE_BUCKET:-epm-tfstate-${ACCOUNT_ID}-${AWS_REGION}}"
@@ -44,6 +61,9 @@ if [ "$ACTION" = "destroy" ]; then
 fi
 
 echo ">> Cuenta ${ACCOUNT_ID} | region ${AWS_REGION} | repositorio ${GITHUB_REPO}"
+if [ "$ACTION" != "destroy" ]; then
+  echo ">> Subject OIDC inmutable: ${GITHUB_SUBJECT_PREFIX}"
+fi
 
 # ---------------------------------------------------------------- 1. Bucket de estado
 if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
@@ -98,12 +118,12 @@ ensure_role() { # $1 = nombre, $2 = archivo con la trust policy
   fi
 }
 
-# plan: PRs y rama main
-trust_policy "[\"repo:${GITHUB_REPO}:pull_request\", \"repo:${GITHUB_REPO}:ref:refs/heads/main\"]" > "$WORK/trust-plan.json"
+# plan: PRs y rama main (subject OIDC inmutable de GitHub)
+trust_policy "[\"${GITHUB_SUBJECT_PREFIX}:pull_request\", \"${GITHUB_SUBJECT_PREFIX}:ref:refs/heads/main\"]" > "$WORK/trust-plan.json"
 # apply/destroy: SOLO jobs que usan el entorno "prod" (con aprobacion)
-trust_policy "[\"repo:${GITHUB_REPO}:environment:prod\"]" > "$WORK/trust-apply.json"
+trust_policy "[\"${GITHUB_SUBJECT_PREFIX}:environment:prod\"]" > "$WORK/trust-apply.json"
 # app: solo la rama main
-trust_policy "[\"repo:${GITHUB_REPO}:ref:refs/heads/main\"]" > "$WORK/trust-app.json"
+trust_policy "[\"${GITHUB_SUBJECT_PREFIX}:ref:refs/heads/main\"]" > "$WORK/trust-app.json"
 
 echo ">> Creando roles de IAM"
 ensure_role "$ROLE_PLAN" "$WORK/trust-plan.json"
