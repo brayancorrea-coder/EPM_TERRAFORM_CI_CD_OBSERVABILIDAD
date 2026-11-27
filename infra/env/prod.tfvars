@@ -5,7 +5,7 @@ project_name = "epm-iac"
 environment  = "prod"
 
 # Correos que recibiran las alertas (SNS). CAMBIAR por correos reales del grupo.
-alert_emails = brayancorrea1114112@correo.itm.edu.co
+alert_emails = ["brayancorrea1114112@correo.itm.edu.co"]
 
 # Cache en memoria (ElastiCache Valkey). Pasar a true en un Pull Request para
 # demostrar el flujo plan -> aprobacion -> apply de la infraestructura.
