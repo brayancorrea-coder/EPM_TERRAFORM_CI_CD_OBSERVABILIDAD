@@ -1,0 +1,2 @@
+# tofu fmt -recursive -check infra  (OpenTofu 1.8.5, mismo lenguaje HCL que Terraform)
+RESULTADO: formato correcto (exit 0)

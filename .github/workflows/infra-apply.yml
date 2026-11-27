@@ -1,0 +1,102 @@
+# CD de la INFRAESTRUCTURA (opcion B) - push a main (archivos bajo infra/**)
+# Job 1 "plan": muestra que cambiaria (sin aprobacion).
+# Job 2 "apply": requiere la aprobacion del entorno "prod" (Settings > Environments > prod >
+#   Required reviewers), vuelve a planear contra main y aplica ESE plan.
+# Al terminar dispara el pipeline de la aplicacion. Equivale a infra-apply.yaml del profesor.
+name: infra-apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write # para disparar app-deploy al terminar
+
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false # nunca cancelar un apply en curso
+
+env:
+  TF_VERSION: "1.12.2"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+      - run: terraform validate
+      - name: plan (vista previa para quien aprueba)
+        run: |
+          set -euo pipefail
+          terraform plan -var-file=env/prod.tfvars -lock=false -no-color -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          {
+            echo "## Terraform plan (vista previa)"
+            grep -E "^(Plan:|No changes)" plan.txt || true
+            echo '```'
+            head -c 50000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60 # el primer apply crea RDS (~10-15 min)
+    environment: prod # <- aprobacion manual
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+      - run: terraform validate
+      - name: plan
+        run: terraform plan -var-file=env/prod.tfvars -lock-timeout=5m -no-color -out=tfplan
+      - name: apply (exactamente el plan anterior)
+        run: terraform apply -lock-timeout=5m -no-color -auto-approve tfplan
+      - name: outputs
+        run: |
+          terraform output -no-color | tee outputs.txt
+          {
+            echo "## Infraestructura aplicada"
+            echo '```'
+            cat outputs.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apply-outputs
+          path: infra/outputs.txt
+
+      - name: Desplegar la aplicacion sobre la infraestructura recien aplicada
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run app-deploy.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"

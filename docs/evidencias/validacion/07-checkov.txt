@@ -1,0 +1,194 @@
+# checkov 3.4.11 sobre infra/ (informativo; mismo analisis que corre el pipeline infra-plan)
+2026-11-25 18:40:53,243 [MainThread  ] [WARNI]  Failed to get the checkov mappings and guidelines from https://api0.prismacloud.io/bridgecrew/api/v2/guidelines. Skips using BC_* IDs will not work.
+Traceback (most recent call last):
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 779, in urlopen
+    self._prepare_proxy(conn)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 1074, in _prepare_proxy
+    conn.connect()
+    ~~~~~~~~~~~~^^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connection.py", line 844, in connect
+    self._tunnel()
+    ~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/http/client.py", line 1029, in _tunnel
+    raise OSError(f"Tunnel connection failed: {code} {message.strip()}")
+OSError: Tunnel connection failed: 403 Forbidden (agent proxy: no rule or network setting allows this host)
+
+The above exception was the direct cause of the following exception:
+
+urllib3.exceptions.ProxyError: ('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden (agent proxy: no rule or network setting allows this host)'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/checkov/common/bridgecrew/platform_integration.py", line 1276, in get_public_run_config
+    request = self.http.request("GET", self.guidelines_api_url, headers=headers)  # type:ignore[no-untyped-call]
+  File "/root/.local/lib/python3.13/site-packages/urllib3/_request_methods.py", line 135, in request
+    return self.request_encode_url(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<3 lines>...
+        **urlopen_kw,
+        ^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/_request_methods.py", line 182, in request_encode_url
+    return self.urlopen(method, url, **extra_kw)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/poolmanager.py", line 673, in urlopen
+    return super().urlopen(method, url, redirect=redirect, **kw)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/poolmanager.py", line 459, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 886, in urlopen
+    return self.urlopen(
+           ~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<13 lines>...
+        **response_kw,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 886, in urlopen
+    return self.urlopen(
+           ~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<13 lines>...
+        **response_kw,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 886, in urlopen
+    return self.urlopen(
+           ~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<13 lines>...
+        **response_kw,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "/root/.local/lib/python3.13/site-packages/urllib3/connectionpool.py", line 847, in urlopen
+    retries = retries.increment(
+        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+    )
+  File "/root/.local/lib/python3.13/site-packages/urllib3/util/retry.py", line 555, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api0.prismacloud.io', port=443): Max retries exceeded with url: /bridgecrew/api/v2/guidelines (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden (agent proxy: no rule or network setting allows this host)')))
+terraform scan results:
+
+Passed checks: 138, Failed checks: 30, Skipped checks: 0
+
+Check: CKV_AWS_394: "Ensure aws_availability_zones data source pins zone identity so its result set does not silently expand when AWS adds an Availability Zone"
+	FAILED for resource: aws_availability_zones.available
+	File: /main.tf:14-16
+Check: CKV_AWS_136: "Ensure that ECR repositories are encrypted using KMS"
+	FAILED for resource: module.app.aws_ecr_repository.app
+	File: /modules/app/main.tf:24-36
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_51: "Ensure ECR Image Tags are immutable"
+	FAILED for resource: module.app.aws_ecr_repository.app
+	File: /modules/app/main.tf:24-36
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_149: "Ensure that Secrets Manager secret is encrypted using KMS CMK"
+	FAILED for resource: module.app.aws_secretsmanager_secret.db_password
+	File: /modules/app/main.tf:62-66
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_149: "Ensure that Secrets Manager secret is encrypted using KMS CMK"
+	FAILED for resource: module.app.aws_secretsmanager_secret.flask_secret_key
+	File: /modules/app/main.tf:78-82
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_158: "Ensure that CloudWatch Log Group is encrypted by KMS"
+	FAILED for resource: module.app.aws_cloudwatch_log_group.app
+	File: /modules/app/main.tf:136-139
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_338: "Ensure CloudWatch log groups retains logs for at least 1 year"
+	FAILED for resource: module.app.aws_cloudwatch_log_group.app
+	File: /modules/app/main.tf:136-139
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_150: "Ensure that Load Balancer has deletion protection enabled"
+	FAILED for resource: module.app.aws_lb.main
+	File: /modules/app/main.tf:210-218
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_91: "Ensure the ELBv2 (Application/Network) has access logging enabled"
+	FAILED for resource: module.app.aws_lb.main
+	File: /modules/app/main.tf:210-218
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_2: "Ensure ALB protocol is HTTPS"
+	FAILED for resource: module.app.aws_lb_listener.http
+	File: /modules/app/main.tf:238-247
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_333: "Ensure ECS services do not have public IP addresses assigned to them automatically"
+	FAILED for resource: module.app.aws_ecs_service.main
+	File: /modules/app/main.tf:249-286
+	Calling File: /main.tf:63-87
+Check: CKV_AWS_31: "Ensure all data stored in the ElastiCache Replication Group is securely encrypted at transit and has auth token"
+	FAILED for resource: module.cache.aws_elasticache_replication_group.main
+	File: /modules/cache/main.tf:29-54
+	Calling File: /main.tf:49-61
+Check: CKV_AWS_191: "Ensure ElastiCache replication group is encrypted by KMS using a customer managed Key (CMK)"
+	FAILED for resource: module.cache.aws_elasticache_replication_group.main
+	File: /modules/cache/main.tf:29-54
+	Calling File: /main.tf:49-61
+Check: CKV_AWS_30: "Ensure all data stored in the ElastiCache Replication Group is securely encrypted at transit"
+	FAILED for resource: module.cache.aws_elasticache_replication_group.main
+	File: /modules/cache/main.tf:29-54
+	Calling File: /main.tf:49-61
+Check: CKV_AWS_293: "Ensure that AWS database instances have deletion protection enabled"
+	FAILED for resource: module.database.aws_db_instance.main
+	File: /modules/database/main.tf:97-140
+	Calling File: /main.tf:33-46
+Check: CKV_AWS_157: "Ensure that RDS instances have Multi-AZ enabled"
+	FAILED for resource: module.database.aws_db_instance.main
+	File: /modules/database/main.tf:97-140
+	Calling File: /main.tf:33-46
+Check: CKV_AWS_161: "Ensure RDS database has IAM authentication enabled"
+	FAILED for resource: module.database.aws_db_instance.main
+	File: /modules/database/main.tf:97-140
+	Calling File: /main.tf:33-46
+Check: CKV_AWS_26: "Ensure all data stored in the SNS topic is encrypted"
+	FAILED for resource: module.monitoring.aws_sns_topic.alerts
+	File: /modules/monitoring/main.tf:182-184
+	Calling File: /main.tf:89-110
+Check: CKV_AWS_260: "Ensure no security groups allow ingress from 0.0.0.0:0 to port 80"
+	FAILED for resource: module.networking.aws_vpc_security_group_ingress_rule.alb_http
+	File: /modules/networking/main.tf:109-116
+	Calling File: /main.tf:22-31
+Check: CKV2_AWS_11: "Ensure VPC flow logging is enabled in all VPCs"
+	FAILED for resource: module.networking.aws_vpc.main
+	File: /modules/networking/main.tf:6-14
+Check: CKV2_AWS_69: "Ensure AWS RDS database instance configured with encryption in transit"
+	FAILED for resource: module.database.aws_db_instance.main
+	File: /modules/database/main.tf:97-140
+Check: CKV2_AWS_57: "Ensure Secrets Manager secrets should have automatic rotation enabled"
+	FAILED for resource: module.app.aws_secretsmanager_secret.db_password
+	File: /modules/app/main.tf:62-66
+Check: CKV2_AWS_57: "Ensure Secrets Manager secrets should have automatic rotation enabled"
+	FAILED for resource: module.app.aws_secretsmanager_secret.flask_secret_key
+	File: /modules/app/main.tf:78-82
+Check: CKV2_AWS_5: "Ensure that Security Groups are attached to another resource"
+	FAILED for resource: module.networking.aws_security_group.alb
+	File: /modules/networking/main.tf:99-107
+Check: CKV2_AWS_5: "Ensure that Security Groups are attached to another resource"
+	FAILED for resource: module.networking.aws_security_group.app
+	File: /modules/networking/main.tf:127-135
+Check: CKV2_AWS_28: "Ensure public facing ALB are protected by WAF"
+	FAILED for resource: module.app.aws_lb.main
+	File: /modules/app/main.tf:210-218
+Check: CKV_AWS_378: "Ensure AWS Load Balancer doesn't use HTTP protocol"
+	FAILED for resource: module.app.aws_lb_target_group.app
+	File: /modules/app/main.tf:220-236
+Check: CKV2_AWS_20: "Ensure that ALB redirects HTTP requests into HTTPS ones"
+	FAILED for resource: module.app.aws_lb.main
+	File: /modules/app/main.tf:210-218
+Check: CKV_AWS_103: "Ensure that load balancer is using at least TLS 1.2"
+	FAILED for resource: module.app.aws_lb_listener.http
+	File: /modules/app/main.tf:238-247
+Check: CKV2_AWS_50: "Ensure AWS ElastiCache Redis cluster with Multi-AZ Automatic Failover feature set to enabled"
+	FAILED for resource: module.cache.aws_elasticache_replication_group.main
+	File: /modules/cache/main.tf:29-54
+

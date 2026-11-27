@@ -1,0 +1,2 @@
+# actionlint .github/workflows/*.yml
+RESULTADO: 0 hallazgos (exit 0)

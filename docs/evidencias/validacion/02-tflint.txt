@@ -1,0 +1,2 @@
+# tflint --recursive (tflint 0.53.0 + ruleset terraform 0.9.1 + ruleset aws 0.40.0, preset recommended)
+RESULTADO: 0 hallazgos (exit 0)

@@ -1,0 +1,119 @@
+# CI de la INFRAESTRUCTURA (opcion B) - Pull Request hacia main (archivos bajo infra/**)
+# fmt -> init -> validate -> tflint -> checkov (informativo) -> plan
+# El plan se publica como comentario del PR y como artefacto. Equivale a
+# cloudbuild/infra-plan.yaml del ejemplo del profesor.
+name: infra-plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-*.yml"
+
+permissions:
+  contents: read
+  id-token: write # OIDC hacia AWS (sin llaves de acceso guardadas en GitHub)
+  pull-requests: write # para comentar el plan en el PR
+
+concurrency:
+  group: infra-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.12.2"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: fmt
+        run: terraform fmt -check -recursive -diff
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: init
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: validate
+        run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.53.0
+
+      - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init
+          tflint --recursive --config="$(pwd)/.tflint.hcl"
+
+      - name: checkov (seguridad de la IaC, informativo)
+        continue-on-error: true
+        run: |
+          pip install --quiet checkov==3.4.11
+          checkov -d . --framework terraform --compact --quiet --soft-fail --output cli --output junitxml --output-file-path console,checkov-report
+
+      - name: plan
+        run: |
+          set -euo pipefail
+          # -lock=false: el plan de un PR nunca debe bloquear un apply que corre en main
+          terraform plan -var-file=env/prod.tfvars -lock=false -no-color -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          echo "=== Resumen ==="
+          grep -E "^(Plan:|No changes)" plan.txt || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plan-pr-${{ github.event.pull_request.number }}
+          path: |
+            infra/plan.txt
+            infra/checkov-report/
+          if-no-files-found: ignore
+
+      - name: Comentar el plan en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let plan = fs.readFileSync('infra/plan.txt', 'utf8');
+            const resumen = (plan.match(/^(Plan:.*|No changes.*)$/m) || ['(sin resumen)'])[0];
+            const max = 60000;
+            if (plan.length > max) plan = plan.slice(0, max) + '\n... (recortado, ver el artefacto del workflow)';
+            const body = [
+              '### Terraform plan',
+              `**${resumen}**`,
+              '',
+              '<details><summary>Ver el plan completo</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '</details>',
+              '',
+              `Commit: \`${context.sha.slice(0, 7)}\``,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

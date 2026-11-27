@@ -1,0 +1,16 @@
+.git
+.github
+.gitignore
+.env
+.venv
+venv
+__pycache__
+*.pyc
+infra
+deploy
+docs
+scripts
+tests
+*.md
+docker-compose.yml
+Dockerfile

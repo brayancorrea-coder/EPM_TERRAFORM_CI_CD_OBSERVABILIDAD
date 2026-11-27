@@ -1,0 +1,2 @@
+# shellcheck de los scripts
+RESULTADO: 0 hallazgos (exit 0)

@@ -1,0 +1,47 @@
+# Destruccion TOTAL de la infraestructura. Solo manual, exige escribir "destroy" y la
+# aprobacion del entorno "prod". Equivale a infra-destroy.yaml del ejemplo del profesor.
+# Ejecutarlo al terminar la actividad para dejar de generar costos.
+name: infra-destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escriba "destroy" para confirmar'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.12.2"
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  destroy:
+    if: ${{ inputs.confirm == 'destroy' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: prod
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+      - run: terraform destroy -var-file=env/prod.tfvars -lock-timeout=5m -no-color -auto-approve

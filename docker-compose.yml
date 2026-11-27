@@ -1,0 +1,44 @@
+# Entorno local para probar el contenedor antes de subirlo a AWS:
+#   docker compose up --build            -> app + MySQL
+#   docker compose --profile cache up    -> app + MySQL + Valkey (cache opcional)
+# Abrir http://localhost:8000  (admin@epm.com / admin123)
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root_local
+      MYSQL_DATABASE: epm_db
+      MYSQL_USER: epm_user
+      MYSQL_PASSWORD: epm_local
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - dbdata:/var/lib/mysql
+
+  cache:
+    image: valkey/valkey:8
+    profiles: ["cache"]
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: clave-solo-para-desarrollo-local
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_USER: epm_user
+      MYSQL_PASSWORD: epm_local
+      MYSQL_DB: epm_db
+      # Descomente para usar el cache (y arranque con --profile cache):
+      # CACHE_HOST: cache
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dbdata:

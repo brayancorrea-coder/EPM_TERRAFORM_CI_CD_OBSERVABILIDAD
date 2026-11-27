@@ -1,0 +1,3 @@
+# Verificacion de argumentos y bloques contra el esquema del proveedor hashicorp/aws 6.25 (derivado de @cdktf/provider-aws 21.22.1)
+Recursos/data sources AWS revisados: 55
+OK: todos los argumentos y bloques existen en el esquema del proveedor AWS 6.25 y no faltan requeridos.

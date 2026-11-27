@@ -1,0 +1,18 @@
+# pytest tests/  (Python 3.13.18)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /tmp/claude-0/-home-claude/d12ae178-b14f-5800-8c12-5d846a906af1/scratchpad/build/EPM
+plugins: platformdirs-4.13.5, anyio-4.15.1
+collecting ... collected 8 items
+
+tests/test_app.py::test_liveness_no_depende_de_mysql PASSED              [ 12%]
+tests/test_app.py::test_readiness_devuelve_503_si_mysql_cae PASSED       [ 25%]
+tests/test_app.py::test_login_responde PASSED                            [ 37%]
+tests/test_app.py::test_cache_deshabilitado_ejecuta_loader PASSED        [ 50%]
+tests/test_app.py::test_cache_guarda_y_lee_decimal PASSED                [ 62%]
+tests/test_app.py::test_cache_no_tumba_la_app_si_falla PASSED            [ 75%]
+tests/test_app.py::test_schema_se_divide_y_se_omite_drop_create_use PASSED [ 87%]
+tests/test_app.py::test_divisor_respeta_comillas_y_comentarios PASSED    [100%]
+
+============================== 8 passed in 0.23s ===============================

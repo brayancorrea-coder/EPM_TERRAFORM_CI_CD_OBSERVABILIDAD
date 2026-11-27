@@ -1,0 +1,105 @@
+# CI/CD de la APLICACION (opcion A): pruebas -> imagen Docker -> ECR -> ECS Fargate -> smoke test.
+# Si el despliegue no pasa la prueba de humo, vuelve a la revision anterior (rollback).
+# Equivale al pipeline de aplicacion (demo-wp) que menciona el ejemplo del profesor.
+name: app-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.py"
+      - "templates/**"
+      - "static/**"
+      - "schema.sql"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "docker/**"
+      - "tests/**"
+      - "scripts/deploy_app.sh"
+      - ".github/workflows/app-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: app-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: epm-iac # debe coincidir con project_name de infra/env/prod.tfvars
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q tests
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APP_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verificar que la infraestructura ya existe
+        id: infra
+        run: |
+          if aws ecr describe-repositories --repository-names "${PROJECT_NAME}-app" >/dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::El repositorio ECR ${PROJECT_NAME}-app aun no existe. Aplique primero la infraestructura (workflow infra-apply)."
+          fi
+
+      - name: Login en ECR
+        if: steps.infra.outputs.ready == 'true'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y publicar la imagen
+        if: steps.infra.outputs.ready == 'true'
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          REPO="${REGISTRY}/${PROJECT_NAME}-app"
+          TAG="${GITHUB_SHA::12}"
+          docker build -t "${REPO}:${TAG}" -t "${REPO}:latest" .
+          docker push "${REPO}:${TAG}"
+          docker push "${REPO}:latest"
+          echo "uri=${REPO}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Resultado del escaneo de vulnerabilidades de ECR (informativo)
+        if: steps.infra.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          aws ecr wait image-scan-complete --repository-name "${PROJECT_NAME}-app" --image-id imageTag="${{ steps.image.outputs.tag }}"
+          {
+            echo "## Escaneo de la imagen ${{ steps.image.outputs.tag }}"
+            aws ecr describe-image-scan-findings --repository-name "${PROJECT_NAME}-app" \
+              --image-id imageTag="${{ steps.image.outputs.tag }}" \
+              --query 'imageScanFindings.findingSeverityCounts' --output json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Desplegar en ECS y probar
+        if: steps.infra.outputs.ready == 'true'
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: bash scripts/deploy_app.sh
